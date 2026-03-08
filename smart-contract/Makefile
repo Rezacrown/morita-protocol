@@ -6,7 +6,7 @@ install-noir:
 	noirup --version 1.0.0-beta.6
 
 install-barretenberg:
-	curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/refs/heads/master/barretenberg/bbup/install | bash
+	curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/refs/heads/next/barretenberg/bbup/install | bash
 	bbup --version 0.86.0-starknet.1
 
 install-starknet:
@@ -26,7 +26,11 @@ devnet:
 	starknet-devnet --accounts=2 --seed=0 --initial-balance=100000000000000000000000
 
 accounts-file:
-	curl -s http://localhost:5050/predeployed_accounts | jq '{"alpha-sepolia": {"devnet0": {address: .[0].address, private_key: .[0].private_key, public_key: .[0].public_key, class_hash: "0xe2eb8f5672af4e6a4e8a8f1b44989685e668489b0a25437733756c5a34a1d6", deployed: true, legacy: false, salt: "0x14", type: "open_zeppelin"}}}' > ./contracts/accounts.json
+	curl -s http://localhost:5050/rpc \
+	-H "Content-Type: application/json" \
+	-d '{"jsonrpc":"2.0","method":"devnet_getPredeployedAccounts","params":[],"id":1}' \
+	| jq '{"alpha-sepolia":{"devnet0":{"address":.result[0].address,"private_key":.result[0].private_key,"public_key":.result[0].public_key,"class_hash":"0xe2eb8f5672af4e6a4e8a8f1b44989685e668489b0a25437733756c5a34a1d6","deployed":true,"legacy":false,"salt":"0x14","type":"open_zeppelin"}}}' \
+	> ./contracts/accounts.json
 
 build-circuit:
 	cd circuit && nargo build
@@ -51,7 +55,7 @@ declare-verifier:
 
 deploy-verifier:
 	# TODO: use class hash from the result of the `make declare-verifier` step
-	cd contracts && sncast deploy --salt 0x00 --class-hash 0x061dac032f228abef9c6626f995015233097ae253a7f72d68552db02f2971b8f
+	cd contracts && sncast deploy --salt 0x00 --class-hash 0x74b93dc3cddcd328f8b242b782deef775d60b0ff494a1f71c315ea579d15941
 
 artifacts:
 	cp ./circuit/target/circuit.json ./app/src/assets/circuit.json
