@@ -4,6 +4,7 @@ import "./globals.css";
 
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/ui/Footer";
+import { StarknetProvider } from "@/components/starknet-provider";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 const playfair = Playfair_Display({
@@ -34,9 +35,11 @@ export default function RootLayout({
         className="bg-white text-black font-sans min-h-screen flex flex-col antialiased selection:bg-black/10"
         suppressHydrationWarning
       >
-        <Navbar />
-        <main className="flex-1 flex flex-col">{children}</main>
-        <Footer />
+        <StarknetProvider>
+          <Navbar />
+          <main className="flex-1 flex flex-col">{children}</main>
+          <Footer />
+        </StarknetProvider>
       </body>
     </html>
   );

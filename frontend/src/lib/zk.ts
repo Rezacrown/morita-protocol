@@ -1,210 +1,148 @@
-/**
- * ZK Proof Generation Library
- * Uses Noir + UltraHonk backend + Garaga for Starknet integration
- */
-
 import { Noir } from "@noir-lang/noir_js";
-import { UltraHonkBackend } from "@aztec/bb.js";
-import { init, getZKHonkCallData } from "garaga";
-import { circuitArtifact, verifyingKeyBytes } from "@/constants";
-
-// Types for invoice proof inputs
-export interface InvoicePrivateInputs {
-  encryptionKey: string;
-  clientNameHash: string;
-  descriptionHash: string;
-}
-
-export interface InvoicePublicInputs {
-  amount: string;
-  freelancerAddress: string;
-  clientAddress: string;
-}
-
-export interface ProofResult {
-  proof: Uint8Array;
-  publicInputs: string[];
-  callData: bigint[];
-}
-
-export type { CircuitArtifactType } from "@/constants";
+import { BarretenbergBackend } from "@noir-lang/backend_barretenberg";
+import { hash, num } from "starknet";
 
 /**
- * Flatten fields as array for Garaga
+ * Interface untuk input invoice
  */
-function flattenFieldsAsArray(fields: string[]): Uint8Array {
-  const flattenedPublicInputs = fields.map(hexToUint8Array);
-  return flattenUint8Arrays(flattenedPublicInputs);
-}
-
-function flattenUint8Arrays(arrays: Uint8Array[]): Uint8Array {
-  const totalLength = arrays.reduce((acc, val) => acc + val.length, 0);
-  const result = new Uint8Array(totalLength);
-
-  let offset = 0;
-  for (const arr of arrays) {
-    result.set(arr, offset);
-    offset += arr.length;
-  }
-
-  return result;
-}
-
-function hexToUint8Array(hex: string): Uint8Array {
-  const sanitisedHex = BigInt(hex).toString(16).padStart(64, "0");
-  const len = sanitisedHex.length / 2;
-  const u8 = new Uint8Array(len);
-
-  let i = 0;
-  let j = 0;
-  while (i < len) {
-    u8[i] = parseInt(sanitisedHex.slice(j, j + 2), 16);
-    i += 1;
-    j += 2;
-  }
-
-  return u8;
+interface InvoiceData {
+  clientName: string;
+  description: string;
+  amount: string; // dalam satuan terkecil (Wei-like)
+  payeeWallet: string;
+  clientWallet: string;
+  timestamp: string;
 }
 
 /**
- * Generate ZK proof for invoice creation
- * Uses Noir circuit + UltraHonk backend + Garaga for Starknet
+ * Helper untuk mengubah string/teks menjadi Felt252 (Starknet standard)
  */
-export async function generateInvoiceProof(
-  privateInputs: InvoicePrivateInputs,
-  publicInputs: InvoicePublicInputs,
-): Promise<ProofResult> {
+export function textToFelt(text: string): string {
+  // Menggunakan TextEncoder (Native Browser) agar aman di sisi client-side Next.js
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(text);
+  const hex =
+    "0x" +
+    Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
+  // computeHashOnElements menerima array BigNumberish
+  return hash.computeHashOnElements([num.toBigInt(hex)]).toString();
+}
+
+/**
+ * TUGAS 1: Generate Invoice Hash
+ * Mengikuti aturan sirkuit main.nr:
+ * hash(client_name_hash, description_hash, amount, payee, client, timestamp)
+ */
+export async function generateInvoiceHash(data: InvoiceData): Promise<string> {
+  const clientNameHash = textToFelt(data.clientName);
+  const descriptionHash = textToFelt(data.description);
+
+  // Menyusun elemen dan memanggil hash dalam satu langkah eksplisit untuk menghindari error TS
+  const finalHash = hash.computeHashOnElements([
+    num.toBigInt(clientNameHash),
+    num.toBigInt(descriptionHash),
+    num.toBigInt(data.amount),
+    num.toBigInt(data.payeeWallet),
+    num.toBigInt(data.clientWallet),
+    num.toBigInt(data.timestamp),
+  ]);
+
+  return finalHash.toString();
+}
+
+/**
+ * TUGAS 2: Generate Amount Commitment
+ * Sesuai sirkuit: hash(amount, encryption_key[0])
+ */
+export async function generateAmountCommitment(
+  amount: string,
+  keyHex: string,
+): Promise<string> {
+  // Ambil byte pertama dari kunci hex
+  const firstByte = parseInt(keyHex.substring(0, 2), 16).toString();
+
+  // Fix Error: Gunakan array literal langsung di dalam argumen fungsi
+  return hash
+    .computeHashOnElements([num.toBigInt(amount), num.toBigInt(firstByte)])
+    .toString();
+}
+
+/**
+ * TUGAS 3: Generate ZK Proof
+ */
+export async function generateZKProof(
+  privateInputs: {
+    clientNameHash: string;
+    descriptionHash: string;
+    amount: string;
+    encryptionKey: string;
+  },
+  publicInputs: {
+    payeeWallet: string;
+    clientWallet: string;
+    timestamp: string;
+    invoiceHash: string;
+    amountCommitment: string;
+  },
+) {
   try {
-    // Initialize Garaga
-    await init();
+    // 1. Load Circuit & Backend
+    const response = await fetch("/artifacts/circuit.json");
+    const circuit = await response.json();
 
-    // Prepare witness inputs following circuit structure
-    const witnessInput = {
-      private_inputs: {
-        encryption_key: privateInputs.encryptionKey,
-        client_name_hash: privateInputs.clientNameHash,
-        description_hash: privateInputs.descriptionHash,
-      },
-      public_inputs: {
-        amount: publicInputs.amount,
-        freelancer_address: publicInputs.freelancerAddress,
-        client_address: publicInputs.clientAddress,
-      },
+    // Inisialisasi Backend untuk Proof Generation
+    const backend = new BarretenbergBackend(circuit);
+
+    // Inisialisasi Noir hanya dengan circuit (API Terbaru)
+    const noir = new Noir(circuit);
+
+    // 2. Format Encryption Key (Hex string to Array of numbers u8)
+    const keyBytes =
+      privateInputs.encryptionKey
+        .match(/.{1,2}/g)
+        ?.map((byte) => parseInt(byte, 16)) || [];
+    if (keyBytes.length !== 32)
+      throw new Error("Encryption key harus 32 bytes");
+
+    // 3. Susun Witness Input
+    const input = {
+      client_name_hash: privateInputs.clientNameHash,
+      description_hash: privateInputs.descriptionHash,
+      amount: privateInputs.amount,
+      encryption_key: keyBytes,
+
+      payee_wallet: publicInputs.payeeWallet,
+      client_wallet: publicInputs.clientWallet,
+      timestamp: publicInputs.timestamp,
+      invoice_hash: publicInputs.invoiceHash,
+      amount_commitment: publicInputs.amountCommitment,
     };
 
-    // Generate witness using Noir
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const noir = new Noir(circuitArtifact as any);
+    // 4. Generate Proof
+    console.log("Generating ZK Proof... Proses ini berjalan di browser.");
 
-    const execResult = await noir.execute(witnessInput);
+    // Langkah 1: Generate Witness (menggunakan Noir class)
+    const { witness } = await noir.execute(input);
 
-    // Generate UltraHonk proof
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const backend = new UltraHonkBackend(circuitArtifact.bytecode, {} as any);
+    // Langkah 2: Generate Proof (menggunakan Backend class)
+    const proofData = await backend.generateProof(witness);
 
-    const proof = await backend.generateProof(execResult.witness, {
-      starknet: true,
-    });
-
-    // Convert public inputs to array
-    const publicInputsFlattened = flattenFieldsAsArray([
-      publicInputs.amount,
-      publicInputs.freelancerAddress,
-      publicInputs.clientAddress,
-    ]);
-
-    // Convert to Starknet calldata using Garaga
-    const callData = getZKHonkCallData(
-      proof.proof,
-      publicInputsFlattened,
-      verifyingKeyBytes,
+    // Konversi hasil Uint8Array ke Array of Hex string (felt252) untuk Starknet
+    return Array.from(proofData.proof).map(
+      (byte) => "0x" + byte.toString(16).padStart(2, "0"),
     );
-
-    return {
-      proof: proof.proof,
-      publicInputs: proof.publicInputs,
-      callData: callData,
-    };
   } catch (error) {
-    console.error("Error generating ZK proof:", error);
-    if (error instanceof Error) {
-      throw new Error(`ZK proof generation failed: ${error.message}`);
-    }
-    throw new Error("Unknown error during ZK proof generation");
+    console.error("Gagal generate ZK Proof:", error);
+    throw error;
   }
 }
 
 /**
- * Verify proof on-chain helper
- * Returns calldata for use with contract call
+ * Helper untuk format address agar konsisten
  */
-export function verifyProofOnChain(
-  verifierAddress: string,
-  callData: bigint[],
-): { contractAddress: string; functionName: string; calldata: bigint[] } {
-  return {
-    contractAddress: verifierAddress,
-    functionName: "verify_ultra_starknet_honk_proof",
-    calldata: callData,
-  };
-}
-
-/**
- * Generate random encryption key
- */
-export function generateEncryptionKey(): string {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  // Fallback
-  return (
-    "0x" +
-    Array.from(crypto.getRandomValues(new Uint8Array(16)))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("")
-  );
-}
-
-/**
- * Hash data using Keccak-256 (SHA3-256)
- */
-export async function hashKeccak256(data: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const dataBuffer = encoder.encode(data);
-
-  // Use Web Crypto API for SHA-3 256
-  if (typeof crypto !== "undefined" && crypto.subtle) {
-    const hashBuffer = await crypto.subtle.digest("SHA3-256", dataBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return (
-      "0x" + hashArray.map((b) => b.toString(16).padStart(2, "0")).join("")
-    );
-  }
-
-  // Fallback hash - simple XOR based
-  const hashArray = Array.from(dataBuffer);
-  let hash = 0;
-  for (let i = 0; i < hashArray.length; i++) {
-    hash = (hash << 5) - hash + hashArray[i];
-    hash = hash & hash;
-  }
-  return "0x" + Math.abs(hash).toString(16).padStart(64, "0");
-}
-
-/**
- * Synchronous Keccak-256 hash for pre-computed values
- */
-export function hashKeccak256Sync(data: string): string {
-  const encoder = new TextEncoder();
-  const dataBuffer = encoder.encode(data);
-  const hash = new Uint8Array(32);
-  for (let i = 0; i < dataBuffer.length; i++) {
-    hash[i % 32] ^= dataBuffer[i];
-  }
-  return (
-    "0x" +
-    Array.from(hash)
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("")
-  );
+export function formatAddress(addr: string): string {
+  return num.toHex(num.toBigInt(addr));
 }
