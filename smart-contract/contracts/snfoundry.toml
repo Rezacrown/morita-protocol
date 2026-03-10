@@ -1,5 +1,12 @@
 [sncast.default]
 url = "http://localhost:5050/rpc"
 accounts-file = "accounts.json"
-account = "devnet0"
+account = "sepolia"
 show-explorer-links = false
+
+
+[sncast.my_sepolia_account]
+accounts-file = "accounts.json"
+account = "sepolia"
+url = "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_10/buIiSsIncuvNLaklQzpGt"
+# (biarkan path accounts-file seperti yang sudah Anda setting sebelumnya)

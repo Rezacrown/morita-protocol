@@ -55,7 +55,7 @@ declare-verifier:
 
 deploy-verifier:
 	# TODO: use class hash from the result of the `make declare-verifier` step
-	cd contracts && sncast deploy --salt 0x00 --class-hash 0x4c818bf6d0d3447eecd24943d2ed8815d971e4a4b30268d6bcfd7abfd5be067
+	cd contracts && sncast deploy --salt 0x00 --class-hash 0x1b3ccab9352d1a65d430fe8843aaa44cbea3398bc1ae169a4f5f7b96180920
 
 # ========== MoritaInvoice Contract ==========
 
@@ -70,9 +70,9 @@ deploy-morita:
 	# owner, fee_collector, strk_token, verifier_contract
 	# catatan: alamat devnet0 dari accounts.json
 	cd contracts && sncast deploy \
-		--salt 0x01 \
-		--class-hash 0x209532ec5f3ea500653d4877bc891e866190bef8b7ab6ae7690d62ced910df0 \
-		--constructor-calldata "0xe2eb8f5672af4e6a4e8a8f1b44989685e668489b0a25437733756c5a34a1d6,0xe2eb8f5672af4e6a4e8a8f1b44989685e668489b0a25437733756c5a34a1d6,0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82dc9dd7c1,0x045a5a403be8ddcc0246f9cbe3568b223118d7005127327ea15037fbd6ddea64"
+    --salt 0x01 \
+    --class-hash 0x15ef99e4fcf84115ef203d0b836ed258b89e3fe5140aed452db2d59dfa65583 \
+    --constructor-calldata 0xe2eb8f5672af4e6a4e8a8f1b44989685e668489b0a25437733756c5a34a1d6 0xe2eb8f5672af4e6a4e8a8f1b44989685e668489b0a25437733756c5a34a1d6 0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82dc9dd7c1 0x45a5a403be8ddcc0246f9cbe3568b223118d7005127327ea15037fbd6ddea64
 
 # ========== Full Devnet Deployment Script ==========
 
