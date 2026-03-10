@@ -1,41 +1,41 @@
 use starknet::ContractAddress;
 
-#[derive(Drop, PartialEq, starknet::Event)]
-pub struct InvoiceCreated {
-    pub invoice_hash: felt252,
-    pub payee: ContractAddress,
-    pub client_wallet: ContractAddress,
-    pub amount: u256,
-    pub created_at: u64,
-}
-
-#[derive(Drop, PartialEq, starknet::Event)]
-pub struct InvoicePaid {
-    pub invoice_hash: felt252,
-    pub payer: ContractAddress,
-    pub amount: u256,
-    pub paid_at: u64,
-    pub proof_hash: felt252, // Ditambahkan sesuai requirement MD
-}
-
-#[derive(Drop, PartialEq, starknet::Event)]
-pub struct InvoiceVerified {
-    pub invoice_hash: felt252,
-    pub verifier: ContractAddress,
-    pub verified_at: u64,
-}
-
-#[derive(Drop, PartialEq, starknet::Event)]
-pub struct InvoiceCancelled {
-    pub invoice_hash: felt252,
-    pub cancelled_by: ContractAddress,
-    pub reason: felt252,
-}
-
-#[derive(Drop, PartialEq, starknet::Event)]
+#[derive(Drop, starknet::Event)]
 pub enum MoritaInvoiceEvent {
     InvoiceCreated: InvoiceCreated,
     InvoicePaid: InvoicePaid,
-    InvoiceVerified: InvoiceVerified,
     InvoiceCancelled: InvoiceCancelled,
+}
+
+#[derive(Drop, starknet::Event)]
+pub struct InvoiceCreated {
+    #[key]
+    pub invoice_hash: felt252,
+    #[key]
+    pub payee: ContractAddress,
+    pub client_wallet: ContractAddress,
+    pub amount: u256,
+    pub amount_commitment: felt252,
+    pub created_at: u64,
+    // Encrypted payload disave di Event agar hemat storage
+    // Frontend bisa fetch event ini dari RPC/Indexer
+    pub encrypted_payload: ByteArray, 
+}
+
+#[derive(Drop, starknet::Event)]
+pub struct InvoicePaid {
+    #[key]
+    pub invoice_hash: felt252,
+    #[key]
+    pub payer: ContractAddress,
+    pub amount: u256,
+    pub paid_at: u64,
+}
+
+#[derive(Drop, starknet::Event)]
+pub struct InvoiceCancelled {
+    #[key]
+    pub invoice_hash: felt252,
+    pub cancelled_by: ContractAddress,
+    pub reason: felt252,
 }
