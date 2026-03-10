@@ -1,10 +1,17 @@
 [package]
-name = "circuit"
+name = "invoice_commitment"
 type = "bin"
-authors = []
+description = "ZK Circuit for Invoice Commitment - Morita Protocol"
+authors = ["Morita Protocol"]
 compiler_version = ">=1.0.0"
 
 [dependencies]
+# Noir stdlib is included by default in Noir 1.0+
+# No external dependencies needed for basic circuit
 
+[dev-dependencies]
 
-
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

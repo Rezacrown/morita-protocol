@@ -1,0 +1,18 @@
+=========================================
+UPDATE Prover.toml WITH THESE VALUES:
+=========================================
+
+invoice_hash = "0x1459c3732299f32a40b6efdb199a10f662fa36c9a3c73ba411c902e5ad592faf"
+amount_commitment = "0x22b1a5c50a6cf637d3d81418e230433858272d493c86ea6b9164d348f680e7ce"
+
+Full inputs reference:
+client_name_hash = 0x01
+description_hash = 0x02
+amount = 0x4563918244f40000
+payee_wallet = 0x499602d2
+client_wallet = 0x024cb016ea
+timestamp = 0x65f40000
+encryption_key[0] = {encryption_key[0] as Field}
+=========================================
+[invoice_commitment] Circuit witness successfully solved
+[invoice_commitment] Witness saved to target/witness.gz

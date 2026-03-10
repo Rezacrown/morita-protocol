@@ -1,2 +1,54 @@
-x = "1"
-y = "2"
+# =====================================================
+# PROVER.TOML - Test inputs for circuit
+# =====================================================
+# Using SMALL values that definitely fit in field modulus
+
+# PRIVATE INPUTS (small Field values)
+client_name_hash = "1"
+description_hash = "2"
+amount = "5000000000000000000"
+
+# Encryption key (32 bytes) - must be [u8; 32]
+encryption_key = [
+    0x12,
+    0x34,
+    0x56,
+    0x78,
+    0x9a,
+    0xbc,
+    0xde,
+    0xf0,
+    0x11,
+    0x22,
+    0x33,
+    0x44,
+    0x55,
+    0x66,
+    0x77,
+    0x88,
+    0x99,
+    0xaa,
+    0xbb,
+    0xcc,
+    0xdd,
+    0xee,
+    0xff,
+    0x00,
+    0xa1,
+    0xb2,
+    0xc3,
+    0xd4,
+    0xe5,
+    0xf6,
+    0xa7,
+    0xb8,
+]
+
+# PUBLIC INPUTS
+payee_wallet = "1234567890"
+client_wallet = "9876543210"
+timestamp = "1710489600"
+
+# Placeholder - will be computed by noir from the inputs above
+invoice_hash = "0x1459c3732299f32a40b6efdb199a10f662fa36c9a3c73ba411c902e5ad592faf"
+amount_commitment = "0x22b1a5c50a6cf637d3d81418e230433858272d493c86ea6b9164d348f680e7ce"
