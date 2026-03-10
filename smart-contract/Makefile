@@ -39,7 +39,7 @@ exec-circuit:
 	cd circuit && nargo execute witness
 
 prove-circuit:
-	bb prove --scheme ultra_honk --oracle_hash starknet -b ./circuit/target/circuit.json -w ./circuit/target/witness.gz -o ./circuit/target
+	bb prove --scheme ultra_honk --oracle_hash starknet -b ./circuit/target/invoice_commitment.json -w ./circuit/target/witness.gz -o ./circuit/target
 
 gen-vk:
 	bb write_vk --scheme ultra_honk --oracle_hash starknet -b ./circuit/target/invoice_commitment.json -o ./circuit/target

@@ -1,0 +1,11 @@
+[package]
+name = "morita_invoice"
+version = "0.1.0"
+
+[dependencies]
+starknet = "2.9.0"
+
+[dev-dependencies]
+
+[scripts]
+test = "snforge test"
