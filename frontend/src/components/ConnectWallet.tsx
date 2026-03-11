@@ -1,22 +1,18 @@
 "use client";
 
 import { useAccount, useConnect, useDisconnect } from "@starknet-start/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-
-// Wallet yang support Starknet
-const STARKNET_WALLETS = ["Argent X", "Braavos"];
+import { useCallback, useEffect, useState } from "react";
 
 // Key untuk localStorage
 const LAST_CONNECTED_WALLET_KEY = "morita_last_connected_wallet";
-const LAST_CONNECTED_ADDRESS_KEY = "morita_last_connected_address";
 
 export default function ConnectWallet() {
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
 
   // Format address pendek (contoh: 0x049d...8f2a)
   const formatShortAddress = useCallback((addr: string | undefined) => {
@@ -24,191 +20,64 @@ export default function ConnectWallet() {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   }, []);
 
-  // Format address lengkap dengan 0x prefix
-  const formatFullAddress = useCallback((addr: string | undefined) => {
-    if (!addr) return "";
-    return addr.startsWith("0x") ? addr : `0x${addr}`;
-  }, []);
-
-  // Handle copy address ke clipboard
-  const handleCopyAddress = useCallback(async () => {
-    if (address) {
-      await navigator.clipboard.writeText(formatFullAddress(address));
-      setIsPopupOpen(false);
-    }
-  }, [address, formatFullAddress]);
-
-  // Filter hanya wallet yang support Starknet (Argent X, Braavos)
-  const filteredConnectors = useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return connectors.filter((c: any) => {
-      const name = c.name || "";
-      return STARKNET_WALLETS.some((wallet) =>
-        name.toLowerCase().includes(wallet.toLowerCase()),
+  // Simple reconnect on mount - hanya coba sekali
+  useEffect(() => {
+    const lastWallet = localStorage.getItem(LAST_CONNECTED_WALLET_KEY);
+    if (lastWallet && !isConnected && connectors.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const connector = (connectors as any[]).find(
+        (c) => c.name?.toLowerCase() === lastWallet.toLowerCase(),
       );
-    });
-  }, [connectors]);
+      if (connector) {
+        console.log("[ConnectWallet] Auto-reconnecting to:", lastWallet);
+        connect({ connector });
+      }
+    }
+  }, [connect, connectors, isConnected]);
 
-  // Cari wallet connector untuk Argent X atau Braavos
-  const preferredConnector = useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const connector = filteredConnectors.find((c: any) => {
-      const name = c.name?.toLowerCase() || "";
-      return name.includes("argent") || name.includes("braavos");
-    });
-    return connector || filteredConnectors[0];
-  }, [filteredConnectors]);
-
-  // Handle connect ke wallet tertentu dengan graceful error handling
+  // Handle connect ke wallet
   const handleConnect = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async (connector: any) => {
+    async (walletName: string) => {
       try {
-        await connect({ connector });
-        // Simpan ke localStorage setelah berhasil connect
-        localStorage.setItem(LAST_CONNECTED_WALLET_KEY, connector.name || "");
-        if (address) {
-          localStorage.setItem(LAST_CONNECTED_ADDRESS_KEY, address);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const connector = (connectors as any[]).find(
+          (c) => c.name?.toLowerCase() === walletName.toLowerCase(),
+        );
+        if (connector) {
+          await connect({ connector });
+          localStorage.setItem(LAST_CONNECTED_WALLET_KEY, walletName);
         }
-      } catch {
-        // User reject atau error - tutup modal tanpa error
+      } catch (error) {
+        console.error("Connect error:", error);
       }
       setIsModalOpen(false);
     },
-    [connect, address],
+    [connect, connectors],
   );
 
   // Handle disconnect
   const handleDisconnect = useCallback(() => {
     disconnect();
     localStorage.removeItem(LAST_CONNECTED_WALLET_KEY);
-    localStorage.removeItem(LAST_CONNECTED_ADDRESS_KEY);
     setIsPopupOpen(false);
   }, [disconnect]);
 
-  // Handle toggle button
+  // Handle toggle button utama
   const handleToggle = useCallback(() => {
     if (isConnected && address) {
+      // Toggle popup
       setIsPopupOpen(!isPopupOpen);
     } else {
       setIsModalOpen(true);
     }
   }, [isConnected, address, isPopupOpen]);
 
-  // Tutup modal/popup saat klik di luar
+  // Handle backdrop click untuk modal wallet selection
   const handleBackdropClick = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
       setIsModalOpen(false);
-      setIsPopupOpen(false);
     }
   }, []);
-
-  // Tutup popup saat escape key
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setIsModalOpen(false);
-        setIsPopupOpen(false);
-      }
-    };
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, []);
-
-  // Set document title untuk aksesibilitas
-  useEffect(() => {
-    if (isConnected && address) {
-      document.title = `Connected: ${formatShortAddress(address)}`;
-    } else {
-      document.title = "Connect Wallet";
-    }
-  }, [isConnected, address, formatShortAddress]);
-
-  // Auto-reconnect logic saat mount
-  useEffect(() => {
-    // Restore last connected wallet dari localStorage
-    const lastConnectedWalletName = localStorage.getItem(
-      LAST_CONNECTED_WALLET_KEY,
-    );
-
-    // Auto-reconnect jika ada data tersimpan dan wallet belum terhubung
-    if (
-      lastConnectedWalletName &&
-      !isConnected &&
-      filteredConnectors.length > 0
-    ) {
-      const connector = filteredConnectors.find(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (c: any) =>
-          c.name?.toLowerCase().includes(lastConnectedWalletName.toLowerCase()),
-      );
-
-      if (connector) {
-        // Auto-connect attempt
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        connect({ connector });
-      }
-    }
-
-    // Selesai loading setelah check
-    const timer = setTimeout(() => setIsLoading(false), 800);
-    return () => clearTimeout(timer);
-  }, [isConnected, filteredConnectors, connect]);
-
-  // Listen untuk accountsChanged event dari wallet
-  useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handleAccountsChanged = (event: CustomEvent<any[]>) => {
-      const accounts = event.detail || [];
-      if (accounts.length === 0) {
-        // User disconnect dari wallet popup
-        disconnect();
-        localStorage.removeItem(LAST_CONNECTED_ADDRESS_KEY);
-      } else {
-        // Update localStorage dengan address baru
-        localStorage.setItem(LAST_CONNECTED_ADDRESS_KEY, accounts[0]);
-      }
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handleDisconnectEvent = () => {
-      disconnect();
-      localStorage.removeItem(LAST_CONNECTED_ADDRESS_KEY);
-    };
-
-    // Listen pada window level untuk menangkap event dari wallet
-    window.addEventListener(
-      "starknet_accountsChanged",
-      handleAccountsChanged as EventListener,
-    );
-    window.addEventListener(
-      "starknet_disconnect",
-      handleDisconnectEvent as EventListener,
-    );
-
-    return () => {
-      window.removeEventListener(
-        "starknet_accountsChanged",
-        handleAccountsChanged as EventListener,
-      );
-      window.removeEventListener(
-        "starknet_disconnect",
-        handleDisconnectEvent as EventListener,
-      );
-    };
-  }, [disconnect]);
-
-  // Tampilkan loading indicator saat checking connection
-  if (isLoading) {
-    return (
-      <button
-        disabled
-        className="px-6 py-2.5 rounded-full text-sm tracking-wide transition-colors bg-gray-100 text-gray-400 font-mono cursor-wait"
-      >
-        Loading...
-      </button>
-    );
-  }
 
   return (
     <>
@@ -229,10 +98,10 @@ export default function ConnectWallet() {
       {/* Wallet Selection Modal */}
       {isModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
           onClick={handleBackdropClick}
         >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden animate-scale-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h3 className="text-lg font-semibold text-gray-900">
                 Select Wallet
@@ -257,12 +126,12 @@ export default function ConnectWallet() {
               </button>
             </div>
             <div className="p-4 space-y-2">
-              {filteredConnectors.length > 0 ? (
+              {connectors.length > 0 ? (
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                filteredConnectors.map((connector: any, idx) => (
+                connectors.map((connector: any, idx) => (
                   <button
                     key={idx}
-                    onClick={() => handleConnect(connector)}
+                    onClick={() => handleConnect(connector.name)}
                     className="w-full flex items-center gap-4 px-4 py-3 rounded-xl hover:bg-gray-50 transition-all duration-200 border border-transparent hover:border-gray-200"
                   >
                     <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
@@ -296,20 +165,38 @@ export default function ConnectWallet() {
       {/* Disconnect Popup */}
       {isPopupOpen && isConnected && address && (
         <div
-          className="fixed z-50 animate-fade-in"
+          className="fixed z-50"
           style={{
             top: "var(--navbar-height, 64px)",
             right: "var(--container-padding, 24px)",
           }}
         >
-          <div className="bg-white rounded-xl shadow-lg border border-gray-100 w-64 overflow-hidden animate-scale-in">
-            <div className="px-4 py-3 border-b border-gray-100">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-100 w-64 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
               <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">
                 Connected Wallet
               </p>
+              <button
+                onClick={() => setIsPopupOpen(false)}
+                className="p-1 rounded hover:bg-gray-100 transition-colors"
+              >
+                <svg
+                  className="w-4 h-4 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
             </div>
             <button
-              onClick={handleCopyAddress}
+              onClick={() => navigator.clipboard.writeText(address)}
               className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors group"
             >
               <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
@@ -361,34 +248,6 @@ export default function ConnectWallet() {
           </div>
         </div>
       )}
-
-      {/* Global styles untuk animations */}
-      <style jsx global>{`
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-        @keyframes scale-in {
-          from {
-            opacity: 0;
-            transform: scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.2s ease-out;
-        }
-        .animate-scale-in {
-          animation: scale-in 0.2s ease-out;
-        }
-      `}</style>
     </>
   );
 }

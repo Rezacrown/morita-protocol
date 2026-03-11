@@ -1,6 +1,8 @@
 import { Noir } from "@noir-lang/noir_js";
 import { BarretenbergBackend } from "@noir-lang/backend_barretenberg";
-import { hash, num } from "starknet";
+import { hash, num, byteArray } from "starknet";
+import AES from "crypto-js/aes";
+import Utf8 from "crypto-js/enc-utf8";
 
 /**
  * Interface untuk input invoice
@@ -141,8 +143,75 @@ export async function generateZKProof(
 }
 
 /**
- * Helper untuk format address agar konsisten
+ * Generate random 32-byte hex string sebagai encryption key
+ * Digunakan untuk enkripsi payload invoice
  */
-export function formatAddress(addr: string): string {
-  return num.toHex(num.toBigInt(addr));
+export function generateEncryptionKey(): string {
+  const randomBytes = new Uint8Array(32);
+  if (typeof window !== "undefined" && window.crypto) {
+    window.crypto.getRandomValues(randomBytes);
+  } else {
+    // Fallback untuk environment non-browser
+    for (let i = 0; i < 32; i++) {
+      randomBytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  return (
+    "0x" +
+    Array.from(randomBytes)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+  );
+}
+
+/**
+ * Encrypt data menggunakan AES-256
+ */
+export function encryptData(data: string, key: string): string {
+  const encrypted = AES.encrypt(data, key).toString();
+  return encrypted;
+}
+
+/**
+ * Decrypt data menggunakan AES-256
+ */
+export function decryptData(encryptedData: string, key: string): string {
+  const decrypted = AES.decrypt(encryptedData, key);
+  return decrypted.toString(Utf8);
+}
+
+/**
+ * Encrypt invoice details (clientName + description) ke dalam satu payload
+ * Menggabungkan data invoice dengan encryption key
+ */
+export function encryptInvoiceDetails(
+  clientName: string,
+  description: string,
+  encryptionKey: string,
+): string {
+  const payload = JSON.stringify({ clientName, description, encryptionKey });
+  return encryptData(payload, encryptionKey);
+}
+
+/**
+ * Decrypt invoice details dari payload terenkripsi
+ */
+export function decryptInvoiceDetails(
+  encryptedPayload: string,
+  encryptionKey: string,
+): { clientName: string; description: string; encryptionKey: string } | null {
+  try {
+    const decrypted = decryptData(encryptedPayload, encryptionKey);
+    return JSON.parse(decrypted);
+  } catch (error) {
+    console.error("Failed to decrypt invoice details:", error);
+    return null;
+  }
+}
+
+/**
+ * Convert string ke ByteArray untuk smart contract parameter
+ */
+export function stringToByteArray(str: string) {
+  return byteArray.byteArrayFromString(str);
 }
